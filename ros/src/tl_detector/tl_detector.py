@@ -10,6 +10,7 @@ from light_classification.tl_classifier import TLClassifier
 import tf
 import cv2
 import yaml
+import math
 
 STATE_COUNT_THRESHOLD = 3
 
@@ -100,8 +101,21 @@ class TLDetector(object):
             int: index of the closest waypoint in self.waypoints
 
         """
-        #TODO implement
-        return 0
+        #TODO implement (to be tested)
+		#Expecting: position.x, position.y, position.z, orientation
+		x = pose.position.x
+		y = pose.position.y
+		
+		minDist = 100000
+		closestIndex = -1
+		for i in range(len(self.waypoints)):
+			x_dist = x - self.waypoints[i].pose.pose.position.x
+			y_dist = y - self.waypoints[i].pose.pose.position.y
+			dist = math.sqrt(x_dist*x_dist + y_dist*y_dist)
+			if dist < minDist:
+				minDist = dist
+				closestIndex = i
+        return closestIndex
 
 
     def project_to_image_plane(self, point_in_world):
@@ -133,10 +147,12 @@ class TLDetector(object):
         except (tf.Exception, tf.LookupException, tf.ConnectivityException):
             rospy.logerr("Failed to find camera to map transform")
 
-        #TODO Use tranform and rotation to calculate 2D position of light in image
+        #TODO Use tranform and rotation to calculate 2D position of light in image (to be tested)
+		#based on http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
+		#http://wiki.ros.org/tf/TfUsingPython
 
-        x = 0
-        y = 0
+		x = fx * (point_in_world.x - trans.x) *image_width  / (point_in_world.z - trans.z)
+        y = fy * (point_in_world.y - trans.y) *image_height / (point_in_world.z - trans.z)
 
         return (x, y)
 
