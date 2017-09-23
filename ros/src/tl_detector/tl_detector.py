@@ -14,6 +14,12 @@ import math
 
 STATE_COUNT_THRESHOLD = 3
 
+def euclidean_distance(p1x, p1y, p2x, p2y):
+    x_dist = p1x - p2x
+    y_dist = p1y - p2y
+    return math.sqrt(x_dist*x_dist + y_dist*y_dist)		
+	
+								 
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
@@ -90,7 +96,7 @@ class TLDetector(object):
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
-
+	
     def get_closest_waypoint(self, pose):
         """Identifies the closest path waypoint to the given position
             https://en.wikipedia.org/wiki/Closest_pair_of_points_problem
@@ -103,17 +109,16 @@ class TLDetector(object):
         """
         #TODO implement (to be tested)
 		#Expecting: position.x, position.y, position.z, orientation
+		
 		x = pose.position.x
 		y = pose.position.y
 		
-		minDist = 100000
+		minDist = float("inf")
 		closestIndex = -1
 		for i in range(len(self.waypoints)):
-			x_dist = x - self.waypoints[i].pose.pose.position.x
-			y_dist = y - self.waypoints[i].pose.pose.position.y
-			dist = math.sqrt(x_dist*x_dist + y_dist*y_dist)
-			if dist < minDist:
-				minDist = dist
+			distance = euclidean_distance(x,y, self.waypoints[i].pose.pose.position.x,self.waypoints[i].pose.pose.position.y)
+			if distance < minDist:
+				minDist = distance
 				closestIndex = i
         return closestIndex
 
@@ -175,11 +180,17 @@ class TLDetector(object):
         x, y = self.project_to_image_plane(light.pose.pose.position)
 
         #TODO use light location to zoom in on traffic light in image
+		
+		dx =50
+		dy = 20
+		
+		area_of_interest = undis_image[x-dx:y-dy,x+dx:y+dy,:]
+		area_of_interest = cv2.resize(area_of_interest, (128,128)) 
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
-
+        return self.light_classifier.get_classification(area_of_interest)
     def process_traffic_lights(self):
+
         """Finds closest visible traffic light, if one exists, and determines its
             location and color
 
@@ -190,10 +201,26 @@ class TLDetector(object):
         """
         light = None
         light_positions = self.config['light_positions']
-        if(self.pose):
-            car_position = self.get_closest_waypoint(self.pose.pose)
+        
 
         #TODO find the closest visible traffic light (if one exists)
+		if(self.pose):
+            car_position = self.get_closest_waypoint(self.pose.pose)
+			
+			if car_position >-1:
+				minDist = float("inf")
+				closestLightIndex = -1
+				x = self.waypoints[car_position].pose.pose.position.x
+				y = self.waypoints[car_position].pose.pose.position.y
+				for index in range(len(light_positions)):
+					distance = euclidean_distance(x,y, light_position[0],light_position[1])
+					if distance < minDist:
+						minDist = distance
+						closestLightIndex = index
+				if closestIndex>-1:
+					light.pose.pose.position.x  = light_positions[closestLightIndex][0]
+					light.pose.pose.position.y  = light_positions[closestLightIndex][1]
+					light_wp = self.get_closest_waypoint(light.pose.pose)
 
         if light:
             state = self.get_light_state(light)
