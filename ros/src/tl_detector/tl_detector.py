@@ -156,8 +156,8 @@ class TLDetector(object):
 		#based on http://www.cse.psu.edu/~rtc12/CSE486/lecture12.pdf
 		#http://wiki.ros.org/tf/TfUsingPython
 
-		x = fx * (point_in_world.x - trans.x) *image_width  / (point_in_world.z - trans.z)
-        y = fy * (point_in_world.y - trans.y) *image_height / (point_in_world.z - trans.z)
+		x = (fx * abs(point_in_world.x - trans.x) *image_width ) / abs(point_in_world.z - trans.z)
+        y = (fy * abs(point_in_world.y - trans.y) *image_height) / abs(point_in_world.z - trans.z)
 
         return (x, y)
 
