@@ -85,6 +85,8 @@ class WaypointUpdater(object):
 		# TODO: Callback for /traffic_waypoint message. Implement
 		# setting the traffic waypoint id
 		self.traffic_wp_id=msg.data
+		if self.traffic_wp_id != -1:
+			rospy.loginfo("Traffic Info" + str(self.traffic_wp_id))
 
 	def obstacle_cb(self, msg):
 		# TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -159,7 +161,6 @@ class WaypointUpdater(object):
 					#    track_waypoints[:]=[]
 					#track_waypoints.extend(self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS])
 					track_waypoints=self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS]
-					rospy.loginfo("Traffic Info" + str(self.traffic_wp_id))
 					if (self.traffic_wp_id != -1):
 						
 						if( dist <= decel_distance):
