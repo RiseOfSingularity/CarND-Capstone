@@ -159,6 +159,7 @@ class WaypointUpdater(object):
 					#    track_waypoints[:]=[]
 					#track_waypoints.extend(self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS])
 					track_waypoints=self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS]
+					rospy.loginfo("Traffic Info" + str(self.traffic_wp_id))
 					if (self.traffic_wp_id != -1):
 						
 						if( dist <= decel_distance):
