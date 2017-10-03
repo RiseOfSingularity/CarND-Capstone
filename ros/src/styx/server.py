@@ -11,13 +11,7 @@ from conf import conf
 
 sio = socketio.Server()
 app = Flask(__name__)
-<<<<<<< HEAD
 msgs = []
-=======
-
-bridge = Bridge(conf)
-msgs = {}
->>>>>>> 16fb96b1749f71d62445ab59ce091c7fa8f9d8c7
 
 dbw_enable = False
 
