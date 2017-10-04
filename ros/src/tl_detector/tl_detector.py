@@ -70,7 +70,7 @@ class TLDetector(object):
 
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifierSimple()
+        self.light_classifier = TLClassifierCV()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -118,9 +118,9 @@ class TLDetector(object):
             light_distance = 0
             if(self.last_wp != -1):
                 light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)
-                rospy.loginfo("Publishing to Red Light - Distance at %0.2fm\n", light_distance)
+                rospy.loginfo("Publishing to Red Light(s) - Distance at %0.2fm\n", light_distance)
             else:
-                rospy.loginfo("Publishing to Red Light - No Lights")
+                rospy.loginfo("Publishing to Red Light(s) - No Lights")
 
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
@@ -150,14 +150,20 @@ class TLDetector(object):
         if(light_positions):
             min_distance = 1e9
             min_light = None
-            for ndx,light in enumerate(self.lights):
-                distance = self.pose_distance(light.pose.pose,pose)
-                if(distance < min_distance and self.is_waypoint_in_front_of_vehicle(light.pose,pose) ):
-                    min_light = light
+            for ndx,light in enumerate(light_positions):
+                traffic_light = TrafficLight()
+                traffic_light.header.stamp =rospy.Time(0)
+
+                traffic_light.pose.pose.position.x = light[0]
+                traffic_light.pose.pose.position.y = light[1]
+
+                distance = self.pose_distance(traffic_light.pose.pose,pose)
+                if(distance < min_distance and self.is_waypoint_in_front_of_vehicle(traffic_light.pose.pose,pose) ):
+                    min_light = traffic_light
                     min_distance = distance
 
 
-        #    rospy.loginfo("Closest Light At: %s\n m", min_distance)
+            #rospy.loginfo("Closest Light At: %s\n m", min_distance)
 
             return min_light,min_distance
         #else
@@ -199,13 +205,13 @@ class TLDetector(object):
             boolean: if the waypoint is in the direction of travel from the pose
 
         """
-        wp_x = waypoint.pose.position.x
-        wp_y = waypoint.pose.position.y
+        wp_x = waypoint.position.x
+        wp_y = waypoint.position.y
 
         # vehicle orientation
         x_vec, y_vec,z_vec = self.get_vector_from_quaternion(pose.orientation)
 
-        wp_dist = self.pose_distance(pose, waypoint.pose)
+        wp_dist = self.pose_distance(pose, waypoint)
 
         vec_dist =  math.sqrt((wp_x-pose.position.x - x_vec*0.1)**2 + (wp_y-pose.position.y - y_vec*0.1)**2)
 
