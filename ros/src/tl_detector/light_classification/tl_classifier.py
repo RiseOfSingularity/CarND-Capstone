@@ -111,7 +111,7 @@ class TLClassifierCV(object):
         elif(has_yellow):
             return TrafficLight.YELLOW
         elif(has_green):
-            return TrafficLight.Green
+            return TrafficLight.GREEN
         else:
             return TrafficLight.UNKNOWN
 
