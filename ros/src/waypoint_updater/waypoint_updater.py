@@ -26,7 +26,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-MINIMUM_DISTANCE_FROM_LIGHT = 5
+MINIMUM_DISTANCE_FROM_LIGHT = 10
+MAX_VELOCITY = 30
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -66,14 +67,26 @@ class WaypointUpdater(object):
                 next_waypoints = self.waypoints[self.next_wp_idx:(self.next_wp_idx+LOOKAHEAD_WPS)]
                 if self.red_light_index != -1:
                     dist = self.distance(self.waypoints, self.next_wp_idx,self.red_light_index)
-                    if dist < MINIMUM_DISTANCE_FROM_LIGHT:
-                        self.too_close = True
+                    rospy.loginfo("pop " + str(dist))
+                    if dist > MINIMUM_DISTANCE_FROM_LIGHT:
+                        distance_to_stop = dist - MINIMUM_DISTANCE_FROM_LIGHT
                         for i, wp in enumerate(next_waypoints):
-                            velocity -= self.current_velocity*self.distance(track_waypoints,0,i)/dist
-                            self.set_waypoint_velocity(next_waypoints,i,velocity)
+                            if self.distance(next_waypoints,0,i) > distance_to_stop:
+                                self.set_waypoint_velocity(next_waypoints,i,0)
+                            velocity = max(self.current_velocity,1)
+                            velocity -= 10
+                            self.set_waypoint_velocity(next_waypoints,i,max(0,velocity))
                     else:
                         self.too_close = False
+                else:
+                     if self.current_velocity < 20:
+                         dist = 10
+                         for i, wp in enumerate(next_waypoints):
+                            velocity = max(self.current_velocity,1)
+                            velocity += 10
+                            self.set_waypoint_velocity(next_waypoints,i,min(MAX_VELOCITY,velocity))
 
+                    
                 lane = Lane()
                 lane.waypoints = next_waypoints
                 lane.header.frame_id = '/world'
@@ -106,6 +119,7 @@ class WaypointUpdater(object):
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
         self.red_light_index = msg.data
+        rospy.loginfo("Index of waypoints red light " + str(self.red_light_index))
         pass
 
     def obstacle_cb(self, msg):
