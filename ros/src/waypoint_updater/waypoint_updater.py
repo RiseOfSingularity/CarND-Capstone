@@ -48,7 +48,8 @@ class WaypointUpdater(object):
         self.current_velocity = 0
         self.red_light_index = -1
         self.isbraking = False
-        
+        self.too_close = False
+
 
 
         #rospy.spin()
@@ -63,7 +64,16 @@ class WaypointUpdater(object):
                 #rospy.loginfo("Next Waypoint Idx: %s", self.next_wp_idx)
                 next_waypoints = self.waypoints
                 next_waypoints = self.waypoints[self.next_wp_idx:(self.next_wp_idx+LOOKAHEAD_WPS)]
-                
+                if self.red_light_index != -1:
+                    dist = self.distance(self.waypoints, self.next_wp_idx,self.red_light_index)
+                    if dist < MINIMUM_DISTANCE_FROM_LIGHT:
+                        self.too_close = True
+                        for i, wp in enumerate(next_waypoints):
+                            velocity -= self.current_velocity*self.distance(track_waypoints,0,i)/dist
+                            self.set_waypoint_velocity(next_waypoints,i,velocity)
+                    else:
+                        self.too_close = False
+
                 lane = Lane()
                 lane.waypoints = next_waypoints
                 lane.header.frame_id = '/world'
@@ -71,7 +81,7 @@ class WaypointUpdater(object):
                 self.final_waypoints_pub.publish(lane)
                 if len(next_waypoints) > 4:
                     rospy.loginfo("Next Waypoint: %s \n 5th: %s\nCurrent Pose: %s", next_waypoints[0].pose.pose, next_waypoints[5].pose.pose,self.cur_pose)
-                
+
             rate.sleep()
 
     def pose_cb(self, msg):
@@ -95,7 +105,7 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
-        self.red_light_index = msg.data 
+        self.red_light_index = msg.data
         pass
 
     def obstacle_cb(self, msg):
@@ -104,7 +114,7 @@ class WaypointUpdater(object):
 
     def needs_braking(self,nextwaypoint_index,distance):
         return nextwaypoint_index > self.red_light_index and distance >MINIMUM_DISTANCE_FROM_LIGHT
-            
+
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
@@ -169,89 +179,6 @@ class WaypointUpdater(object):
                 #return closest_wp_idx + 1
 
         return closest_wp_idx
-
-
-
-	def publish(self):
-		rate=rospy.Rate(0.5)
-		rospy.loginfo("Next position %s \n car position: %s", track_waypoints[0].pose.pose, self.cur_pose.pose.pose)
-
-		while not rospy.is_shutdown():
-
-		# determining The closest waypoint in front of the car
-        
-			#track_waypoints=[]
-			if self.all_waypoints is not None:
-
-
-				self.next_wp_id=self.get_closest_node_id()
-				if self.next_wp_id != -1:
-					
-					#if len(track_waypoints) != 0:
-					#    track_waypoints[:]=[]
-					#track_waypoints.extend(self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS])
-					track_waypoints=self.all_waypoints[self.next_wp_id:self.next_wp_id+LOOKAHEAD_WPS]
-					if (self.traffic_wp_id != -1):
-						
-						if( dist <= decel_distance):
-							self.too_close = True
-						else:
-							self.too_close=False
-
-						#Setting the velocity of the waypoints
-						if self.too_close is True:
-							dist = self.distance(track_waypoints,0,self.traffic_wp_id)
-							velocity=self.get_waypoint_velocity(track_waypoints[0])
-							
-							for i,waypoint in enumerate(track_waypoints[0:next_wp_id]):
-								velocity -=velocity*self.distance(track_waypoints,0,i)/dist
-								self.set_waypoint_velocity(track_waypoints,i,velocity)
-
-						elif self.get_waypoint_velocity(track_waypoints[0]) < Max_speed :
-							dist=20
-							velocity=self.get_waypoint_velocity(track_waypoints[0])
-							for i,waypoint in enumerate(track_waypoints):
-								if(self.distance(track_waypoints,0,i) <= dist):
-									velocity+=velocity*self.distance(track_waypoints,0,i)/dist
-									self.set_waypoint_velocity(track_waypoints,i,velocity)
-								else:
-									self.set_waypoint_velocity(track_waypoints,i,Max_speed)
-
-							
-					
-
-					if (self.traffic_wp_id == -1):
-						velocity=self.get_waypoint_velocity(track_waypoints[0])
-						if velocity <= Max_speed :
-							dist=20
-							velocity=self.get_waypoint_velocity(track_waypoints[0])
-							for i,waypoint in enumerate(track_waypoints):
-								if(self.distance(track_waypoints,0,i) <= dist):
-									velocity+=velocity*self.distance(track_waypoints,0,i)/dist
-									self.set_waypoint_velocity(track_waypoints,i,velocity)
-								else:
-									self.set_waypoint_velocity(track_waypoints,i,Max_speed)
-						else:
-							for i,waypoint in enumerate(track_waypoints):
-								self.set_waypoint_velocity(track_waypoints,i,Max_speed)
-
-
-
-
-
-					#self.traffic_wp_id =-1
-
-					lane = Lane()
-					lane.header.frame_id='/world'
-					lane.header.stamp=rospy.Time(0)
-					lane.waypoints = track_waypoints
-
-					self.final_waypoints_pub.publish(lane)
-
-					rospy.loginfo("Next position %s \n car position: %s", track_waypoints[0].pose.pose, self.cur_pose.pose.pose)
-        
-			rate.sleep()
-
 
 
 if __name__ == '__main__':
