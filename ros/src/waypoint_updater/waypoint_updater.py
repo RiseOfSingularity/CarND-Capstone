@@ -26,8 +26,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
-MINIMUM_DISTANCE_FROM_LIGHT = 10
-MAX_VELOCITY = 30
+MINIMUM_DISTANCE_FROM_LIGHT = 2
+MAX_VELOCITY = 10
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -67,7 +67,7 @@ class WaypointUpdater(object):
                 next_waypoints = self.waypoints[self.next_wp_idx:(self.next_wp_idx+LOOKAHEAD_WPS)]
                 if self.red_light_index != -1:
                     dist = self.distance(self.waypoints, self.next_wp_idx,self.red_light_index)
-                    rospy.loginfo("pop " + str(dist))
+                    rospy.loginfo("POP " + str(dist))
                     if dist > MINIMUM_DISTANCE_FROM_LIGHT:
                         distance_to_stop = dist - MINIMUM_DISTANCE_FROM_LIGHT
                         for i, wp in enumerate(next_waypoints):
@@ -77,13 +77,15 @@ class WaypointUpdater(object):
                             velocity -= 10
                             self.set_waypoint_velocity(next_waypoints,i,max(0,velocity))
                     else:
+                        for i, wp in enumerate(next_waypoints):
+                            self.set_waypoint_velocity(next_waypoints,i,0)
                         self.too_close = False
                 else:
-                     if self.current_velocity < 20:
-                         dist = 10
-                         for i, wp in enumerate(next_waypoints):
-                            velocity = max(self.current_velocity,1)
-                            velocity += 10
+                    if self.current_velocity < MAX_VELOCITY:
+                        dist = 10
+                        for i, wp in enumerate(next_waypoints):
+                            velocity = self.current_velocity
+                            velocity += 2
                             self.set_waypoint_velocity(next_waypoints,i,min(MAX_VELOCITY,velocity))
 
                     
