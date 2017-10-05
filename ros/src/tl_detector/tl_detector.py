@@ -33,6 +33,7 @@ class TLDetector(object):
         self.pose = None
         self.waypoints = None
         self.camera_image = None
+        self.has_image = False
         self.lights = []
 
         '''
@@ -40,7 +41,7 @@ class TLDetector(object):
         '''
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         sub2 = rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
-        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
+        sub6 = rospy.Subscriber('/image_color', Image, self.image_cb, queue_size = 1)
 
 
         '''
@@ -78,6 +79,7 @@ class TLDetector(object):
         self.last_wp = -1
         self.state_count = 0
 
+        self.loop()
         rospy.spin()
 
     def pose_cb(self, msg):
@@ -99,40 +101,54 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights()
 
-        '''
-        Publish upcoming red lights at camera frequency.
-        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-        of times till we start using it. Otherwise the previous stable state is
-        used.
-        '''
-        if self.state != state:
-            self.state_count = 0
-            self.state = state
-        elif self.state_count >= STATE_COUNT_THRESHOLD:
-            self.last_state = self.state
-            light_wp = light_wp if state == TrafficLight.RED else -1
-            self.last_wp = light_wp
+    def loop(self):
+        rate = rospy.Rate(5)
+        while not rospy.is_shutdown():
 
-            light_distance = 0
-            if(self.last_wp != -1):
-                light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)
-                rospy.loginfo("Publishing to Red Light(s) - Distance at %0.2fm\n", light_distance)
+            if(not self.has_image):
+                rospy.loginfo("No images available")
+                continue
+
+            light_wp, state = self.process_traffic_lights()
+
+            if state == None:
+                rospy.loginfo("Unable to process image")
+                continue
+
+
+            '''
+            Publish upcoming red lights at camera frequency.
+            Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
+            of times till we start using it. Otherwise the previous stable state is
+            used.
+            '''
+            if self.state != state:
+                self.state_count = 0
+                self.state = state
+            elif self.state_count >= STATE_COUNT_THRESHOLD:
+                self.last_state = self.state
+                light_wp = light_wp if state == TrafficLight.RED else -1
+                self.last_wp = light_wp
+
+                light_distance = 0
+                if(self.last_wp != -1):
+                    light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)
+                    rospy.loginfo("Publishing to Red Light(s) - Distance at %0.2fm\n", light_distance)
+                else:
+                    rospy.loginfo("Publishing to Red Light(s) - No Lights")
+
+                self.upcoming_red_light_pub.publish(Int32(light_wp))
             else:
-                rospy.loginfo("Publishing to Red Light(s) - No Lights")
+                light_distance = 0
+                if(self.last_wp != -1):
+                    light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)
+                    rospy.loginfo("Publishing to Red Light - Distance at %0.2fm\n", light_distance)
+                else:
+                    rospy.loginfo("Publishing to Red Light - No Lights")
 
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
-        else:
-            light_distance = 0
-            if(self.last_wp != -1):
-                light_distance = self.pose_distance(self.pose.pose,self.waypoints.waypoints[self.last_wp].pose.pose)
-                rospy.loginfo("Publishing to Red Light - Distance at %0.2fm\n", light_distance)
-            else:
-                rospy.loginfo("Publishing to Red Light - No Lights")
-
-            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
-        self.state_count += 1
+                self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+            self.state_count += 1
 
     def get_closest_traffic_light(self, pose, light_positions):
         """Identifies the closest traffic light waypoint to the given waypoint.
@@ -302,7 +318,7 @@ class TLDetector(object):
         """
         if(not self.has_image):
             self.prev_light_loc = None
-            return False
+            return None
 
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
         image_width = self.config['camera_info']['image_width']
