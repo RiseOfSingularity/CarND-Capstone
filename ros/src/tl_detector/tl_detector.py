@@ -8,7 +8,6 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifierCV
-#from light_classification.tl_objdet_classifier import TLODClassifier
 
 import tf
 import cv2
@@ -74,9 +73,7 @@ class TLDetector(object):
 
 
         self.bridge = CvBridge()
-        #self.light_classifier = TLClassifierCV()
-	self.path = os.path.dirname(__file__) + '/light_classification/faster-R-CNN'
-        self.light_classifier = TLClassifierCV()#TLODClassifier(self.path)#TLClassifier(self.path)
+        self.light_classifier = TLClassifierCV()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
