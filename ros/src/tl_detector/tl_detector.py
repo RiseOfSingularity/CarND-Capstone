@@ -8,7 +8,7 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifierCV
-from light_classification.tl_classifier import TLClassifierSimple
+#from light_classification.tl_objdet_classifier import TLODClassifier
 
 import tf
 import cv2
@@ -16,15 +16,18 @@ import yaml
 import os
 
 STATE_COUNT_THRESHOLD = 3
+enable_imshow = False
+labels_filename = "labels.csv"
+classification_description = ['RED', 'YELLOW', 'GREEN', '', 'UNKNOWN']
 
 class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
-        self.create_train_data = rospy.get_param('generate_train',False)
+        self.create_train_data = False#rospy.get_param('generate_train',False)
 
         if self.create_train_data:
-            self.train_data_dir = os.path.join(rospy.get_param('PATH'),'train')
+            self.train_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),'train')   #os.path.join(rospy.get_param('PATH'),'train')
             self.train_data_start_number = 1
 
             if self.create_train_data == True and not os.path.exists(self.train_data_dir):
@@ -71,7 +74,9 @@ class TLDetector(object):
 
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifierCV()
+        #self.light_classifier = TLClassifierCV()
+	self.path = os.path.dirname(__file__) + '/light_classification/faster-R-CNN'
+        self.light_classifier = TLClassifierCV()#TLODClassifier(self.path)#TLClassifier(self.path)
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -274,6 +279,7 @@ class TLDetector(object):
         image_width = self.config['camera_info']['image_width']
         image_height = self.config['camera_info']['image_height']
 
+
         # get transform between pose of camera and world frame
         trans = None
         try:
@@ -320,21 +326,46 @@ class TLDetector(object):
             self.prev_light_loc = None
             return None
 
+
+        # fixing encoding
         cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        if cv_image.size != (800,600,3):
+             cv_image = resized_image = cv2.resize(cv_image, (800, 600)) 
         image_width = self.config['camera_info']['image_width']
         image_height = self.config['camera_info']['image_height']
 
-        x, y = self.project_to_image_plane(light.pose.pose.position)
+        #x, y = self.project_to_image_plane(light.pose.pose.position)
+
+        
 
         if self.create_train_data:
             light_distance = self.pose_distance(self.pose.pose,light.pose.pose)
             if light_distance < 150:
-                train_image_path = os.path.join(self.train_data_dir,'{0}.jpg'.format(self.train_data_start_number))
+                image_filename = "img_"+str(self.train_data_start_number).zfill(4)+'.jpg'
+                labels_path = os.path.join(self.train_data_dir,labels_filename)
+                train_image_path = os.path.join(self.train_data_dir,image_filename)
+		if os.path.exists(labels_path ):
+		    append_write = 'a' 
+		else:
+		    append_write = 'w' 
+
+		f = open(labels_path, append_write)
+		str_line = "%d,%s,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n" % (self.train_data_start_number, image_filename,  self.pose.pose.position.x, self.pose.pose.position.y, self.pose.pose.position.z, self.pose.pose.orientation.x,self.pose.pose.orientation.y,self.pose.pose.orientation.z,self.pose.pose.orientation.w)
+		f.write(str_line)  # python will convert \n to os.linesep
+		f.close()
                 cv2.imwrite(train_image_path, cv_image)
                 self.train_data_start_number = self.train_data_start_number + 1
 
         #Get classification
-        return self.light_classifier.get_classification(cv_image)
+	if self.light_classifier is not None:
+            classification = self.light_classifier.get_classification(cv_image)
+        else:
+            classification = TrafficLight.UNKNOWN
+	if enable_imshow:
+            cv2.imshow("Image window", cv_image)
+            cv2.waitKey(1)
+        print "traffic light: ", classification_description[classification]
+        return classification#self.light_classifier.get_classification(cv_image)
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
@@ -346,7 +377,7 @@ class TLDetector(object):
 
         """
         light = None
-
+	print self.path
         # List of positions that correspond to the line to stop in front of for a given intersection
         stop_line_positions = self.config['stop_line_positions']
         if(self.pose):
