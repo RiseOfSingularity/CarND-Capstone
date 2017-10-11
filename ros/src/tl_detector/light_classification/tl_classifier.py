@@ -1,7 +1,14 @@
 from styx_msgs.msg import TrafficLight
 
+import tensorflow as tf
 import numpy as np
 import cv2
+from functools import partial
+import os
+import sys
+
+THRESHOLD = 0.50
+
 
 class TLClassifierCV(object):
     def __init__(self):
@@ -119,44 +126,71 @@ class TLClassifierCV(object):
         #print("Light: R:{} G:{} Y:{}".format(has_red,has_green,has_yellow))
 
 
-class TLClassifierSimple(object):
-    def __init__(self):
-        self.lower = np.array([150, 100, 150])
-        self.upper = np.array([180, 255, 255])
 
-    def get_classification(self, image):
+class TLClassifier(object):
+    def __init__(self, model_path):
+        self.tf_session = None
+        self.predict = None
+        self.model_path = model_path
+        self.labels = [TrafficLight.UNKNOWN, TrafficLight.RED, TrafficLight.YELLOW, TrafficLight.GREEN, TrafficLight.UNKNOWN]
+        self.readsize = 1024
+        PATH_TO_CKPT = self.model_path + '/checkpoints/frozen_inference_graph.pb'
+        # set up tensorflow and traffic light classifier
+        if self.tf_session is None:
+            # get the traffic light classifier
+            self.config = tf.ConfigProto(log_device_placement=True)
+            self.config.gpu_options.per_process_gpu_memory_fraction = 0.6  
+            self.config.operation_timeout_in_ms = 30000 # terminate anything that don't return in 50 seconds
+            self.tf_graph = tf.Graph()
+            # load the model into memory
+            with self.tf_graph.as_default():
+                od_graph_def = tf.GraphDef()
+                with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+                    serialized_graph = fid.read()
+                    od_graph_def.ParseFromString(serialized_graph)
+                    tf.import_graph_def(od_graph_def, name='')
+
+
+                    self.tf_session = tf.Session(graph=self.tf_graph, config=self.config)
+                    self.image_tensor = self.tf_graph.get_tensor_by_name('image_tensor:0') #define input
+                    #define outputs:			
+                    self.detection_scores = self.tf_graph.get_tensor_by_name('detection_scores:0')  
+                    self.detection_classes = self.tf_graph.get_tensor_by_name('detection_classes:0')
+                    self.num_detections = self.tf_graph.get_tensor_by_name('num_detections:0')
+                    self.predict = True
+        
+
+    def get_classification(self, image_np):
         """Determines the color of the traffic light in the image
 
         Args:
-            image (cv::Mat): image containing the traffic light
+            image_np (cv::Mat): image containing the traffic light
 
         Returns:
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        state = TrafficLight.UNKNOWN
 
-        red_area, red_image = self.get_colored_area(image, self.lower, self.upper)
+        predict = TrafficLight.UNKNOWN
+        if self.predict is not None:
+            # Expand dimensions to this shape: [1, None, None, 3]
+            image_np_expanded = np.expand_dims(image_np, axis=0)
+            # Perform the detection
+            (scores, classes, num) = self.tf_session.run(
+                [self.detection_scores, self.detection_classes, self.num_detections],
+                feed_dict={self.image_tensor: image_np_expanded})
 
-        # Needs careful tuning for the number of red pixesls
-        red_pixels = 40
+            # Visualization of the results of a detection.
+            scores = np.squeeze(scores)
+            classes = np.squeeze(classes).astype(np.int32)
 
-        if red_area > red_pixels:
-            state = TrafficLight.RED
+            # calculate prediction
+            index_prediction = 4  # TrafficLight.UNKNOWN
+            predict = self.labels[index_prediction]
+            class_predicted = classes[0]
+            confidence = scores[0]
+            
+            if class_predicted > 0 and class_predicted < 4 and confidence is not None and confidence > THRESHOLD:
+                predict = self.labels[class_predicted]
+        return predict
 
-        return state
-    def get_traffic_circle(self,image):
-        '''
-        Use Canny to get the circles for the images
-        '''
-        return False
-
-
-    def get_colored_area(self, image, lower, upper):
-        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        mask_image = cv2.inRange(hsv_image, lower, upper)
-        extracted_image = cv2.bitwise_and(image, image, mask=mask_image)
-        area = cv2.countNonZero(mask_image)
-
-        return area, extracted_image

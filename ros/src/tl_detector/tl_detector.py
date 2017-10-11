@@ -8,6 +8,8 @@ from styx_msgs.msg import Lane
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from light_classification.tl_classifier import TLClassifierCV
+from light_classification.tl_classifier import TLClassifier
+
 
 import tf
 import cv2
@@ -23,10 +25,10 @@ class TLDetector(object):
     def __init__(self):
         rospy.init_node('tl_detector')
 
-        self.create_train_data = False#rospy.get_param('generate_train',False)
+        self.create_train_data = rospy.get_param('generate_train',False)
 
         if self.create_train_data:
-            self.train_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),'train')   #os.path.join(rospy.get_param('PATH'),'train')
+            self.train_data_dir = os.path.join(rospy.get_param('PATH'),'train')
             self.train_data_start_number = 1
 
             if self.create_train_data == True and not os.path.exists(self.train_data_dir):
@@ -73,7 +75,11 @@ class TLDetector(object):
 
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifierCV()
+	UseNN = rospy.get_param('UseNN')
+	if UseNN ==True:
+		self.light_classifier = TLClassifier(os.path.dirname(__file__) + '/light_classification/faster-R-CNN')
+	else:
+	        self.light_classifier = TLClassifierCV()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -359,10 +365,10 @@ class TLDetector(object):
         else:
             classification = TrafficLight.UNKNOWN
 	if enable_imshow:
+            cv2.putText(cv_image,classification_description[classification], (80,80), cv2.FONT_HERSHEY_SIMPLEX, 4,(255,0,0),2)
             cv2.imshow("Image window", cv_image)
             cv2.waitKey(1)
-        print "traffic light: ", classification_description[classification]
-        return classification#self.light_classifier.get_classification(cv_image)
+        return classification
 
     def process_traffic_lights(self):
         """Finds closest visible traffic light, if one exists, and determines its
